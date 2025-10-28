@@ -1,14 +1,11 @@
-#include "communication.h"
 #include "imu_sensor.h"
 
 void setup() {
-  Serial.begin(115200);
-  initIMU();
-  startCom();
+    Serial.begin(115200);
+    initVibrationSensor();
 }
 
 void loop() {
-  IMUData data = readIMU();
-  sendMsg((uint8_t*)&data, sizeof(IMUData));
-  delay(500);
+    sendVibrationData();
+    delay(500);  // enviar cada 500 ms
 }

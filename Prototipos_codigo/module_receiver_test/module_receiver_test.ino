@@ -57,8 +57,12 @@ void setup() {
     return;
   }
 
-  // Registrar callback de recepción
-  esp_now_register_recv_cb(onRecv);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error iniciando ESP-NOW");
+    return;
+  }
+  esp_now_register_recv_cb(onDataRecv);
+
 
   Serial.println("Listo para recibir datos...");
 }

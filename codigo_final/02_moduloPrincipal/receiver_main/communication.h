@@ -2,12 +2,19 @@
 #define COMMUNICATION_H
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <esp_now.h>
 
+// Inicialización
 void startCom();
 void stopCom();
-void receiveMsg(const uint8_t *data, int len);
-void sendMsg(uint8_t *data, size_t len);
+
+// --- Vibración ---
+bool newVibrationDataAvailable();
+float getVibrationX();
+float getVibrationY();
+float getVibrationZ();
+
+// --- Corriente ---
+bool newCurrentDataAvailable();
+float getCurrentValue();
 
 #endif

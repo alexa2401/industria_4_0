@@ -1,15 +1,9 @@
-#ifndef IMU_SENSOR_H
-#define IMU_SENSOR_H
+#ifndef VIBRATION_SENSOR_H
+#define VIBRATION_SENSOR_H
 
 #include <Arduino.h>
 
-struct IMUData {
-  int x;
-  int y;
-  int z;
-};
-
-void initIMU();
-IMUData readIMU();
+void initVibrationSensor();
+void sendVibrationData();
 
 #endif
