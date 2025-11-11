@@ -12,17 +12,18 @@ static bool vibrationAvailable = false;
 static float currentValue = 0;
 static bool currentAvailable = false;
 
+// --- Variables para microparo (botonera) ---
+static String microParoMsg = "";
+static bool microParoAvailable = false;
+
 // --- Callback para recepción ESP-NOW ---
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
-    // Convertir datos recibidos a String
     String msg = "";
-    for (int i = 0; i < len; i++) {
-        msg += (char)data[i];
-    }
+    for (int i = 0; i < len; i++) msg += (char)data[i];
 
-    // --- Procesar datos de vibración ---
+    // --- Vibración ---
     if (msg.startsWith("ID:VIBRATION")) {
-        int xIndex = msg.indexOf("X:"); 
+        int xIndex = msg.indexOf("X:");
         int yIndex = msg.indexOf("Y:");
         int zIndex = msg.indexOf("Z:");
 
@@ -33,7 +34,8 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             vibrationAvailable = true;
         }
     }
-    // --- Procesar datos de corriente ---
+
+    // --- Corriente ---
     else if (msg.startsWith("ID:CURRENT")) {
         int vIndex = msg.indexOf("VALUE:");
         if (vIndex != -1) {
@@ -41,9 +43,14 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
             currentAvailable = true;
         }
     }
+
+    // --- Microparo (botonera) ---
+    else if (msg.startsWith("ID:BUTTON")) {
+        microParoMsg = msg;   // guardamos el mensaje tal cual llega
+        microParoAvailable = true;
+    }
 }
 
-// --- Inicialización ESP-NOW ---
 void startCom() {
     WiFi.mode(WIFI_STA);
     if (esp_now_init() != ESP_OK) {
@@ -54,30 +61,16 @@ void startCom() {
     Serial.println("Receptor ESP-NOW iniciado");
 }
 
-// --- Funciones públicas para vibración ---
-bool newVibrationDataAvailable() {
-    return vibrationAvailable;
-}
+// --- Vibración ---
+bool newVibrationDataAvailable() { return vibrationAvailable; }
+float getVibrationX() { vibrationAvailable = false; return vibrationX; }
+float getVibrationY() { return vibrationY; }
+float getVibrationZ() { return vibrationZ; }
 
-float getVibrationX() {
-    vibrationAvailable = false;
-    return vibrationX;
-}
+// --- Corriente ---
+bool newCurrentDataAvailable() { return currentAvailable; }
+float getCurrentValue() { currentAvailable = false; return currentValue; }
 
-float getVibrationY() {
-    return vibrationY;
-}
-
-float getVibrationZ() {
-    return vibrationZ;
-}
-
-// --- Funciones públicas para corriente ---
-bool newCurrentDataAvailable() {
-    return currentAvailable;
-}
-
-float getCurrentValue() {
-    currentAvailable = false;
-    return currentValue;
-}
+// --- Microparo (botonera) ---
+bool newMicroParoAvailable() { return microParoAvailable; }
+String getMicroParoMsg() { microParoAvailable = false; return microParoMsg; }

@@ -17,4 +17,8 @@ float getVibrationZ();
 bool newCurrentDataAvailable();
 float getCurrentValue();
 
+// --- Microparo (botonera) ---
+bool newMicroParoAvailable();
+String getMicroParoMsg();
+
 #endif

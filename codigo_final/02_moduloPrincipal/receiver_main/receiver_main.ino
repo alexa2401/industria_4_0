@@ -7,25 +7,20 @@
 const char* topicVibration = "datos/vibracion";
 const char* topicCurrent   = "datos/corriente";
 const char* topicOperator  = "datos/operador";
+const char* topicMicroParo = "datos/microparo";  // <<< AGREGADO
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    // Inicializa ESP-NOW
     startCom();
-
-    // Inicializa WiFi + MQTT
     initMQTT();
-
-    // Inicializa lector RFID
     initRFID();
 
     Serial.println("ESP32 Principal listo.");
 }
 
 void loop() {
-    // Mantener MQTT vivo
     loopMQTT();
 
     // --- RFID ---
@@ -33,8 +28,7 @@ void loop() {
     if (checkForCard(uidDecimal)) {
         String payload = String(uidDecimal);
         publishMQTT(topicOperator, payload.c_str());
-        Serial.print("Tarjeta detectada. UID decimal: ");
-        Serial.println(payload);
+        Serial.println("Tarjeta detectada: " + payload);
         delay(800);
     }
 
@@ -43,27 +37,27 @@ void loop() {
         float x = getVibrationX();
         float y = getVibrationY();
         float z = getVibrationZ();
-
         char payload[80];
-        snprintf(payload, sizeof(payload),
-                 "ID:VIBRATION;X:%.2f,Y:%.2f,Z:%.2f", x, y, z);
-
+        snprintf(payload, sizeof(payload), "ID:VIBRATION;X:%.2f,Y:%.2f,Z:%.2f", x, y, z);
         publishMQTT(topicVibration, payload);
-        Serial.print("Vibración publicada: ");
         Serial.println(payload);
     }
 
     // --- Corriente ---
     if (newCurrentDataAvailable()) {
         float current = getCurrentValue();
-
         char payload[50];
-        snprintf(payload, sizeof(payload),
-                 "ID:CURRENT;VALUE:%.2f", current);
-
+        snprintf(payload, sizeof(payload), "ID:CURRENT;VALUE:%.2f", current);
         publishMQTT(topicCurrent, payload);
-        Serial.print("Corriente publicada: ");
         Serial.println(payload);
+    }
+
+    // --- Microparo (botonera) ---
+    if (newMicroParoAvailable()) {
+        String msg = getMicroParoMsg();
+        publishMQTT(topicMicroParo, msg.c_str());
+        Serial.print("MicroParo publicado: ");
+        Serial.println(msg);
     }
 
     delay(50);

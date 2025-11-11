@@ -7,7 +7,7 @@ const char* ssid = "Tec-IoT";
 const char* password = "spotless.magnetic.bridge";
 
 // ----- Configuración MQTT -----
-const char* mqtt_server = "10.25.91.204";
+const char* mqtt_server = "10.25.86.214";
 const int mqtt_port = 1883;
 const char* mqtt_client_id = "ESP32_Receiver";
 
