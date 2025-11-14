@@ -5,9 +5,9 @@
 
 // Pines del GY-61/ADXL335
 // Se asume que estás usando pines ADC en tu ESP32/microcontrolador
-const int xPin = D0; 
-const int yPin = D1; 
-const int zPin = D2;
+const int xPin = A0; 
+const int yPin = A1; 
+const int zPin = A2;
 
 // Referencias del ADC
 const float VREF = 3.3;
