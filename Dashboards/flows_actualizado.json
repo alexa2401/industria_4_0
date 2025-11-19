@@ -1,0 +1,22 @@
+[
+    {
+        "id": "62c39b18c3afc7c2",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "Iniciar timer",
+        "func": "// --------------------------------\n// CONTEXTO\n// --------------------------------\nlet startTime = context.get(\"startTime\") || null;\nlet running = context.get(\"running\") || false;\n\n// Microparos\nlet ultCantidad = context.get(\"ultCantidad\") || { m1: 0, m2: 0, m3: 0 };\nlet ultTotales = context.get(\"ultTotales\") || { m1: 0, m2: 0, m3: 0 };\n\n// Usuario del turno\nlet ultUsuario = context.get(\"ultUsuario\") || \"\";   // <-- NUEVO\n\n\n// --------------------------------\n// 1) MENSAJES DE MICROPAROS\n// --------------------------------\nif (msg.payload.cantidad || msg.payload.totales) {\n\n    if (msg.payload.cantidad) {\n        context.set(\"ultCantidad\", msg.payload.cantidad);\n    }\n\n    if (msg.payload.totales) {\n        context.set(\"ultTotales\", msg.payload.totales);\n    }\n\n    return null;\n}\n\n\n// --------------------------------\n// 2) MENSAJE DE USUARIO\n// --------------------------------\nif (msg.payload.usuario) {\n\n    context.set(\"ultUsuario\", msg.payload.usuario);   // <-- Guardar usuario\n\n    return null;\n}\n\n\n// --------------------------------\n// 3) MENSAJES DE INICIO/FIN DE TURNO (RFID)\n// --------------------------------\nif (typeof msg.payload.inicioTurno === \"undefined\") {\n    return null;\n}\n\nlet estado = msg.payload.inicioTurno;\n\n\n// --------------------------------\n// INICIO DE TURNO → REINICIO COMPLETO\n// --------------------------------\nif (estado === true && !running) {\n\n    running = true;\n    startTime = Date.now();\n\n    // Reset de microparos\n    context.set(\"ultCantidad\", { m1: 0, m2: 0, m3: 0 });\n    context.set(\"ultTotales\", { m1: 0, m2: 0, m3: 0 });\n\n    // Reset de usuario\n    context.set(\"ultUsuario\", \"\");   // <-- limpiar usuario\n\n    context.set(\"running\", true);\n    context.set(\"startTime\", startTime);\n\n    return null;\n}\n\n\n// --------------------------------\n// FIN DE TURNO → ESCRIBIR CSV\n// --------------------------------\nif (estado === false && running) {\n\n    running = false;\n    context.set(\"running\", false);\n\n    let duracion = ((Date.now() - startTime) / 1000).toFixed(2);\n\n    // Recuperar datos guardados\n    let c = context.get(\"ultCantidad\");\n    let s = context.get(\"ultTotales\");\n    let u = context.get(\"ultUsuario\");  // <-- usuario\n\n\n    // ------ HEADER ------\n    let header =\n        \"duracion_segundos,\" +\n        \"cantidad_m1,\" +\n        \"cantidad_m2,\" +\n        \"cantidad_m3,\" +\n        \"total_m1,\" +\n        \"total_m2,\" +\n        \"total_m3,\" +\n        \"usuario\\n\";\n\n    // ------ LÍNEA ------\n    let linea =\n        duracion + \",\" +\n        c.m1 + \",\" +\n        c.m2 + \",\" +\n        c.m3 + \",\" +\n        s.m1 + \",\" +\n        s.m2 + \",\" +\n        s.m3 + \",\" +\n        (u || \"\") + \"\\n\";\n\n    msg.payload = header + linea;\n    return msg;\n}\n\n\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1110,
+        "y": 780,
+        "wires": [
+            [
+                "9918fb50c015a7f4"
+            ]
+        ]
+    }
+]
