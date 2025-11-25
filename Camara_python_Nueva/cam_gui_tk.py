@@ -353,14 +353,14 @@ class CamDiffApp:
         self.current_frame = None
 
         # MQTT: ajusta host/puerto/credenciales según tu broker
-        self._setup_mqtt(host="localhost", port=1883, user=None, password=None, topic="datos/score")
+        self._setup_mqtt(host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score")
 
         self.detect_and_fill()
         self.open_camera()
         self.update_loop()
 
     # ---- MQTT helpers ----
-    def _setup_mqtt(self, host="localhost", port=1883, user=None, password=None, topic="datos/score"):
+    def _setup_mqtt(self, host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score"):
         self.mqtt_topic = topic
         try:
             self.mqtt = mqtt.Client(protocol=mqtt.MQTTv311)
@@ -521,6 +521,7 @@ class CamDiffApp:
 
         # Publicar score por MQTT (tópico 'datos/score')
         self._publish_score(pct, ts=ts, mode=mode)
+        print("Publicado score MQTT:", pct)
 
         if self.comp_win is None or not self.comp_win.winfo_exists():
             self.comp_win = ComparisonWindow(self.root, max_w=520)
