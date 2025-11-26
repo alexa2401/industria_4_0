@@ -353,15 +353,16 @@ class CamDiffApp:
         self.current_frame = None
 
         # MQTT: ajusta host/puerto/credenciales según tu broker
-        self._setup_mqtt(host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score")
+        self._setup_mqtt(host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score", incoming_topic="camara/estadoTurno")
 
         self.detect_and_fill()
         self.open_camera()
         self.update_loop()
 
     # ---- MQTT helpers ----
-    def _setup_mqtt(self, host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score"):
+    def _setup_mqtt(self, host="10.25.90.33", port=1883, user=None, password=None, topic="datos/score", incoming_topic="camara/estadoTurno"):
         self.mqtt_topic = topic
+        self.mqtt_in_topic = incoming_topic
         try:
             self.mqtt = mqtt.Client(protocol=mqtt.MQTTv311)
         except TypeError:
@@ -369,9 +370,15 @@ class CamDiffApp:
         if user and password:
             self.mqtt.username_pw_set(user, password)
         try:
+            self.mqtt.on_message = self._on_mqtt_message
             self.mqtt.connect(host, port, keepalive=60)
             self.mqtt.loop_start()
-            self.status.configure(text=f"MQTT conectado a {host}:{port} (topic: {topic})")
+            # subscribe to incoming topic for trigger messages
+            try:
+                self.mqtt.subscribe(self.mqtt_in_topic)
+            except Exception:
+                pass
+            self.status.configure(text=f"MQTT conectado a {host}:{port} (topic out: {topic}, in: {incoming_topic})")
         except Exception as e:
             self.mqtt = None
             self.status.configure(text=f"MQTT no disponible: {e}")
@@ -392,6 +399,76 @@ class CamDiffApp:
         #     self.mqtt.publish(self.mqtt_topic, json.dumps(payload), qos=0, retain=False)
         # except Exception:
         #     pass
+
+    def _on_mqtt_message(self, client, userdata, msg):
+        # se ejecuta en el hilo del cliente MQTT -> despachar al hilo de la GUI
+        payload = msg.payload
+        try:
+            val = payload.decode("utf-8").strip()
+        except Exception:
+            val = ""
+        # parseo robusto a booleano
+        def parse_bool(s):
+            if s is None:
+                return None
+            if isinstance(s, bool):
+                return s
+            if isinstance(s, (int, float)):
+                return bool(s)
+            if isinstance(s, bytes):
+                try:
+                    s = s.decode("utf-8")
+                except Exception:
+                    s = None
+            if not isinstance(s, str):
+                s = str(s)
+            s2 = s.strip().lower()
+            if s2 in ("true", "1", "on", "si", "yes"):
+                return True
+            if s2 in ("false", "0", "off", "no"):
+                return False
+            # try JSON
+            try:
+                j = json.loads(s)
+                if isinstance(j, bool):
+                    return j
+                if isinstance(j, dict):
+                    for k in ("estado", "turno", "value", "on", "estadoTurno"):
+                        if k in j:
+                            v = j[k]
+                            if isinstance(v, bool):
+                                return v
+                            if isinstance(v, (int, float)):
+                                return bool(v)
+                            if isinstance(v, str):
+                                return parse_bool(v)
+                # array maybe: take first boolean-ish element
+                if isinstance(j, (list, tuple)) and j:
+                    return parse_bool(j[0])
+            except Exception:
+                pass
+            return None
+
+        b = parse_bool(val)
+        if b is None:
+            # try last resort if payload bytes looked like b'true' etc.
+            b = parse_bool(payload)
+        # schedule action in main thread
+        self.root.after(0, lambda: self._handle_incoming_turno(b, msg.topic))
+
+    def _handle_incoming_turno(self, val, topic=None):
+        if val is None:
+            # ignore unparseable messages but set status for debug
+            self.status.configure(text=f"Recibido payload no válido en {topic}")
+            return
+        if val:
+            # equivalent to pressing "Tomar Foto 1"
+            self.status.configure(text=f"Recibido TURN: true -> Tomando Foto 1")
+            self.take_photo1()
+        else:
+            # equivalent to pressing "Tomar Foto 2"
+            self.status.configure(text=f"Recibido TURN: false -> Tomando Foto 2 y comparando")
+            self.take_photo2_compare()
 
     # --- Detección de cámaras (0..max_index) ---
     def detect_and_fill(self, max_index: int = 10):
