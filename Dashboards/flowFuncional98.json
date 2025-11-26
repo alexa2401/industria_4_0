@@ -1,0 +1,24 @@
+[
+    {
+        "id": "73cd1cecc949ab7f",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "calibracionEstadoVibraciones",
+        "func": "// =============================\n// VARIABLES DE CONTEXTO\n// =============================\nlet state = context.get(\"state\") || \"reposo\";\n\n// Buffers y parámetros\nlet buffer = context.get(\"buffer\") || [];\nlet calibrated = context.get(\"calibrated\") || false;\n\nlet desv_reposo = context.get(\"desv_reposo\");\nlet rango_reposo = context.get(\"rango_reposo\");\n\nlet startTime = context.get(\"startTime\") || null;\n\n// =============================\n// 1) Leer magnitud\n// =============================\nlet m = Number(msg.payload);\nif (isNaN(m)) return null;\n\n// =============================\n// 2) Revisar si el usuario pidió calibración\n// =============================\nlet startCal = global.get(\"empezarCalibracion\") || false;\n\n// ===============================================\n// *** Permite recalibrar cuando quieras\n// ===============================================\nif (startCal && calibrated) {\n    calibrated = false;\n    context.set(\"calibrated\", false);\n    context.set(\"buffer\", []);\n    context.set(\"startTime\", null);\n}\n\n// Si aún no está calibrado y el usuario pidió iniciar calibración:\nif (!calibrated && startCal) {\n\n    // Inicializar tiempo de inicio\n    if (!startTime) {\n        startTime = Date.now();\n        context.set(\"startTime\", startTime);\n    }\n\n    const CAL_TIME = 20000; // 20 segundos\n    let elapsed = Date.now() - startTime;\n    let remaining = Math.max(0, Math.ceil((CALTime - elapsed) / 1000));\n\n    // Mientras calibra, guarda valores\n    buffer.push(m);\n    context.set(\"buffer\", buffer);\n\n    msg.payload = {\n        estado: \"calibrando... Tiempo restante: \" + remaining,\n        magnitud: m\n    };\n\n    if (elapsed < CAL_TIME) {\n        return msg;\n    }\n\n    // =============================\n    // Termina la calibración\n    // =============================\n\n    let avg = buffer.reduce((a, b) => a + b, 0) / buffer.length;\n\n    let variance = buffer.reduce((a, b) => a + (b - avg) * (b - avg), 0) / buffer.length;\n    let sd = Math.sqrt(variance);\n\n    let minV = Math.min(...buffer);\n    let maxV = Math.max(...buffer);\n    let rango = maxV - minV;\n\n    context.set(\"desv_reposo\", sd);\n    context.set(\"rango_reposo\", rango);\n    context.set(\"calibrated\", true);\n\n    global.set(\"empezarCalibracion\", false);\n\n    context.set(\"startTime\", null);\n    context.set(\"buffer\", []);\n\n    msg.payload = {\n        estado: \"Calibración completada\",\n        desv_reposo: sd,\n        rango: rango\n    };\n    return msg;\n}\n\n// =============================\n// 4) Si no está calibrado\n// =============================\nif (!calibrated) {\n    msg.payload = {\n        estado: \"esperando calibración...\",\n        magnitud: m\n    };\n    return msg;\n}\n\n// =============================\n// 5) YA CALIBRADO → DETECTAR ESTADO\n// =============================\n\n// Ventana móvil → 10 muestras (≈5 segundos a 2 Hz)\nconst WINDOW = 10;\nbuffer.push(m);\nif (buffer.length > WINDOW) buffer.shift();\ncontext.set(\"buffer\", buffer);\n\n// Estadísticas actuales\nlet avg = buffer.reduce((a, b) => a + b, 0) / buffer.length;\nlet variance = buffer.reduce((a, b) => a + (b - avg) * (b - avg), 0) / buffer.length;\nlet sd = Math.sqrt(variance);\n\nlet minV = Math.min(...buffer);\nlet maxV = Math.max(...buffer);\nlet rango = maxV - minV;\n\n// Umbrales dinámicos\nlet umbral_desv = desv_reposo * 5;\nlet umbral_rango = rango_reposo * 10;\n\n// Máquina de estados\nif (state === \"reposo\") {\n    if (sd > umbral_desv || rango > umbral_rango) {\n        state = \"uso\";\n    }\n} else {\n    // Factor de regreso aumentado → más rápido volver a reposo\n    if (sd < umbral_desv * 0.8 && rango < umbral_rango * 0.8) {\n        state = \"reposo\";\n    }\n}\n\ncontext.set(\"state\", state);\n\n// =============================\n// 6) SALIDA FINAL\n// =============================\nmsg.payload = {\n    estado: state === \"uso\" ? \"En uso\" : \"En reposo\",\n    magnitud: m,\n    sd: sd,\n    rango: rango\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 9,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1080,
+        "y": 300,
+        "wires": [
+            [
+                "41361cdc4bdeb103",
+                "6b33b8663ed27f02",
+                "c72534077049f552"
+            ]
+        ]
+    }
+]

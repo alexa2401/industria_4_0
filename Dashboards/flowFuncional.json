@@ -1,0 +1,1363 @@
+[
+    {
+        "id": "1d8c128a74b26a4c",
+        "type": "tab",
+        "label": "Industria4_0",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "c3f1bee918133d53",
+        "type": "mqtt in",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "topic": "datos/vibracion",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "1bdbd5fea9c43a9d",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 220,
+        "y": 140,
+        "wires": [
+            [
+                "324c0d79e3755393",
+                "841f9d48b79edd11",
+                "c72534077049f552"
+            ]
+        ]
+    },
+    {
+        "id": "0f347efb8db08e2e",
+        "type": "mqtt in",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "topic": "datos/operador",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "1bdbd5fea9c43a9d",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 220,
+        "y": 460,
+        "wires": [
+            [
+                "4f746874b8cbad0c",
+                "589a8f9b7dbe664f",
+                "5ca36d8c5d8ee760",
+                "c72534077049f552"
+            ]
+        ]
+    },
+    {
+        "id": "4f746874b8cbad0c",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "IdentificadorOperador",
+        "func": "// msg.payload contiene el UID decimal recibido desde MQTT\nvar uid = msg.payload;\nvar operador = \"\";\n\n// Mapear UID a nombre\nif (uid == \"3024565763\") {\n    operador = \"Benito Juarez\";\n} else if (uid == \"3597117261\") {\n    operador = \"Porfirio Diaz\";\n} else {\n    operador = \"UID desconocido\";\n}\n\n// Guardar operador en variable global\nglobal.set(\"operadorActual\", operador);\n\n// Enviar en el payload también\nmsg.payload = {\n    usuario: operador\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 460,
+        "wires": [
+            [
+                "873002c0b0bc2447",
+                "62c39b18c3afc7c2"
+            ]
+        ]
+    },
+    {
+        "id": "589a8f9b7dbe664f",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "Recuperar hora",
+        "func": "// Function Node: registrar entrada/salida por UID recibido en msg.payload\n// msg.payload se espera como string numérico: \"3024565763\"\n\n// --- Obtener timestamp formateado ---\nfunction nowTimestamp() {\n    const n = new Date();\n    const y = n.getFullYear();\n    const mo = (\"0\" + (n.getMonth() + 1)).slice(-2);\n    const d = (\"0\" + n.getDate()).slice(-2);\n    const hh = (\"0\" + n.getHours()).slice(-2);\n    const mm = (\"0\" + n.getMinutes()).slice(-2);\n    const ss = (\"0\" + n.getSeconds()).slice(-2);\n    return `${y}-${mo}-${d} ${hh}:${mm}:${ss}`;\n}\n\n// --- Validar payload (UID esperado) ---\nlet incoming = msg.payload;\nif (typeof incoming !== \"string\" && typeof incoming !== \"number\") {\n    return null;\n}\nincoming = String(incoming).trim();\nif (!/^[0-9]{3,}$/.test(incoming)) {\n    return null;\n}\n\n// --- Recuperar contexto persistente ---\nlet storedUID = context.get(\"uid\") || null;\nlet horaEntrada = context.get(\"horaEntrada\") || null;\nlet horaSalida = context.get(\"horaSalida\") || null;\n\n// --- Timestamp actual ---\nlet ts = nowTimestamp();\n\n// --- Lógica de ciclos ---\nif (!storedUID) {\n    // 1) Primer pase: no había UID almacenado → guardar entrada\n    storedUID = incoming;\n    horaEntrada = ts;\n    horaSalida = null;\n\n    context.set(\"uid\", storedUID);\n    context.set(\"horaEntrada\", horaEntrada);\n    context.set(\"horaSalida\", horaSalida);\n\n    msg.payload = {\n        uid: storedUID,\n        entrada: horaEntrada,\n        salida: horaSalida,\n        inicioTurno: true,\n        evento: \"entrada_guardada\"\n    };\n    return msg;\n}\n\nif (storedUID === incoming) {\n    if (!horaSalida) {\n        // 2) Segundo pase (mismo UID, no hay salida) → guardar salida\n        horaSalida = ts;\n        context.set(\"horaSalida\", horaSalida);\n\n        msg.payload = {\n            uid: storedUID,\n            entrada: horaEntrada,\n            salida: horaSalida,\n            inicioTurno: false,\n            evento: \"salida_guardada\"\n        };\n        return msg;\n\n    } else {\n        // 3) Tercer pase (mismo UID, ya había salida) → iniciar nuevo ciclo\n        horaEntrada = ts;\n        horaSalida = null;\n\n        context.set(\"horaEntrada\", horaEntrada);\n        context.set(\"horaSalida\", horaSalida);\n\n        msg.payload = {\n            uid: storedUID,\n            entrada: horaEntrada,\n            salida: horaSalida,\n            inicioTurno: true,\n            evento: \"nuevo_ciclo_entrada\"\n        };\n        return msg;\n    }\n}\nelse {\n    // 4) UID distinto → iniciar registro nuevo\n    storedUID = incoming;\n    horaEntrada = ts;\n    horaSalida = null;\n\n    context.set(\"uid\", storedUID);\n    context.set(\"horaEntrada\", horaEntrada);\n    context.set(\"horaSalida\", horaSalida);\n\n    msg.payload = {\n        uid: storedUID,\n        entrada: horaEntrada,\n        salida: horaSalida,\n        inicioTurno: true,\n        evento: \"entrada_nuevo_uid\"\n    };\n    return msg;\n}\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 540,
+        "wires": [
+            [
+                "d449a0218f5bb920",
+                "ad9435d78ddbba88",
+                "62c39b18c3afc7c2",
+                "b53d3b164e992330",
+                "c72534077049f552"
+            ]
+        ]
+    },
+    {
+        "id": "324c0d79e3755393",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "Separar datos",
+        "func": "// Ejemplo de payload: \"ID:VIBRATION;X:1.84,Y:1.78,Z:2.17\"\nlet payload = msg.payload;\n\n// Separar la parte después del ';'\nlet parts = payload.split(';');\nif (parts.length < 2) {\n    msg.payload = { x: null, y: null, z: null };\n    return msg;\n}\n\n// Extraer los valores de X, Y, Z\nlet values = parts[1];  // \"X:1.84,Y:1.78,Z:2.17\"\nlet regex = /X:([-\\d.]+),Y:([-\\d.]+),Z:([-\\d.]+)/;\nlet match = values.match(regex);\n\nif (match) {\n    // Convertir a número y tomar valor absoluto\n    let x = Math.abs(parseFloat(match[1]));\n    let y = Math.abs(parseFloat(match[2]));\n    let z = Math.abs(parseFloat(match[3]));\n\n    msg.payload = { x: x, y: y, z: z };\n} else {\n    msg.payload = { x: null, y: null, z: null };\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 140,
+        "wires": [
+            [
+                "978c0ead33dfc785",
+                "eb01c78ab2ba3569",
+                "68bda566a8b3a191",
+                "b5de1ba0fd97a5a7",
+                "bba2e62d8b6d7822"
+            ]
+        ]
+    },
+    {
+        "id": "978c0ead33dfc785",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "guardar datos",
+        "func": "// msg.payload = {x: 2253, y: 2201, z: 2687}\nvar now = new Date();\nvar timestamp = now.toISOString(); // YYYY-MM-DDTHH:MM:SS.sssZ\n\n// Convertir a CSV: timestamp,X,Y,Z\nmsg.payload = timestamp + \",\" + msg.payload.x + \",\" + msg.payload.y + \",\" + msg.payload.z + \"\\n\";\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "105c53861430b001",
+        "type": "file",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "filename": "D:\\7mo_semestre\\Proyecto\\industria_4_0\\datos\\datos_acelerometro.txt",
+        "filenameType": "str",
+        "appendNewline": true,
+        "createDir": false,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 1190,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "841f9d48b79edd11",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 7",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 440,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "5ca36d8c5d8ee760",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 8",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 440,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "1a5a2eb09bc068a0",
+        "type": "mqtt in",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "topic": "datos/corriente",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "1bdbd5fea9c43a9d",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 220,
+        "y": 760,
+        "wires": [
+            [
+                "9150206e17d05814",
+                "010fe0cf99a6f3c8"
+            ]
+        ]
+    },
+    {
+        "id": "9150206e17d05814",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 9",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 720,
+        "wires": []
+    },
+    {
+        "id": "010fe0cf99a6f3c8",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "limpiarCorriente",
+        "func": "// Node-RED Function: SEN-11005 + LM358 conversion + smoothing + spike protection\n// Input: msg.payload must be the original string like \"ID:CURRENT;VALUE:1234\"\n// Output: msg.payload object with diagnostics and current_rms, plus debug info.\n\n// -------------------- Configurable params --------------------\nconst turns = Number(context.get('turns') ?? 2000);   // SEN-11005 ≈ 1:2000\nconst Rb = Number(context.get('Rb') ?? 10.0);         // burden resistor in ohms (10Ω typical)\nconst G = Number(context.get('G') ?? 1.5);            // op-amp gain (set exact if known)\n\nconst VREF = 3.3;\nconst ADC_RES = 4095;\nconst OFFSET = VREF / 2;\n\nconst CLIP_MIN = Number(context.get('CLIP_MIN') ?? 0.05);  // remove tiny noise (A)\nconst N = Number(context.get('N') ?? 20);                 // samples in window\nconst EMA_ALPHA = Number(context.get('EMA_ALPHA') ?? 0.3); // smoothing factor (0..1)\nconst SPIKE_MULT = Number(context.get('SPIKE_MULT') ?? 3.0); // detect spike if new > prev * SPIKE_MULT\nconst SPIKE_LIMIT_MULT = Number(context.get('SPIKE_LIMIT_MULT') ?? 1.5); // how much to allow jump if spike\n\n// -------------------- Parse incoming message --------------------\nvar payload = msg.payload;\nvar match = (typeof payload === 'string') ? payload.match(/VALUE:([0-9.]+)/) : null;\n\nif (!match) {\n    // If payload already parsed to object with adc, accept it\n    if (payload && typeof payload.adc === 'number') {\n        var adc = payload.adc;\n    } else {\n        msg.payload = null;\n        return msg;\n    }\n} else {\n    var adc = Number(match[1]);\n}\n\n// -------------------- Convert to voltage and center --------------------\nlet voltage = (adc * VREF) / ADC_RES;\nlet centered = voltage - OFFSET;\n\n// -------------------- Maintain sample window --------------------\nlet samples = context.get('samples') || [];\nsamples.push(centered);\nif (samples.length > N) samples.shift();\n\n// default outputs\nlet mean = null, vRMS_raw = null, vRMS_ac = null, current_raw = null, current_rms = null;\n\n// compute only when window full\nif (samples.length === N) {\n    // mean (DC)\n    let sum = 0;\n    for (let v of samples) sum += v;\n    mean = sum / N;\n\n    // vRMS raw (includes DC)\n    let sumSqAll = 0;\n    for (let v of samples) sumSqAll += v * v;\n    vRMS_raw = Math.sqrt(sumSqAll / N);\n\n    // vRMS after removing mean (AC component)\n    let sumSq = 0;\n    for (let v of samples) {\n        let d = v - mean;\n        sumSq += d * d;\n    }\n    vRMS_ac = Math.sqrt(sumSq / N);\n\n    // Physical conversion using turns / (Rb * G)\n    let phys_factor = turns / (Rb * G); // [A / V]\n    current_raw = vRMS_ac * phys_factor; // before clip\n\n    // Clip small noise\n    if (current_raw < CLIP_MIN) {\n        current_rms = 0;\n    } else {\n        current_rms = Number((current_raw - CLIP_MIN).toFixed(2));\n    }\n\n    // -------------------- Smoothing & spike protection (EMA) --------------------\n    let prev_ema = context.get('ema') ?? current_rms;\n    if (prev_ema === null) prev_ema = current_rms;\n\n    // Spike detection: if current_raw is extremely larger than prev_ema, limit jump\n    if (prev_ema !== null && prev_ema > 0) {\n        if (current_rms > prev_ema * SPIKE_MULT) {\n            // It's likely a spike — cap the immediate jump\n            current_rms = Number((prev_ema * SPIKE_LIMIT_MULT).toFixed(2));\n        }\n    }\n\n    // Exponential moving average\n    let ema = (prev_ema === null) ? current_rms : (EMA_ALPHA * current_rms + (1 - EMA_ALPHA) * prev_ema);\n    ema = Number(ema.toFixed(2));\n\n    // save EMA\n    context.set('ema', ema);\n\n    // override current_rms with smoothed value for output\n    current_rms = ema;\n}\n\n// save samples\ncontext.set('samples', samples);\n\n// -------------------- Build output --------------------\nmsg.payload = {\n    adc: adc,\n    voltage: Number(voltage.toFixed(4)),\n    centered: Number(centered.toFixed(5)),\n    samples: samples.length,\n    mean: mean === null ? null : Number(mean.toFixed(6)),\n    vRMS_raw: vRMS_raw === null ? null : Number(vRMS_raw.toFixed(6)),\n    vRMS_ac: vRMS_ac === null ? null : Number(vRMS_ac.toFixed(6)),\n    current_raw: current_raw === null ? null : Number(current_raw.toFixed(4)),\n    current_rms: current_rms    // final smoothed current (A)\n};\n\nmsg.debug = {\n    turns: turns,\n    Rb: Rb,\n    G: G,\n    phys_factor: Number((turns / (Rb * G)).toFixed(4)),\n    CLIP_MIN: CLIP_MIN,\n    N: N,\n    EMA_ALPHA: EMA_ALPHA,\n    SPIKE_MULT: SPIKE_MULT,\n    SPIKE_LIMIT_MULT: SPIKE_LIMIT_MULT\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 1,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 760,
+        "wires": [
+            [
+                "913142379bbf8ecd",
+                "f7b7eea68eff085f",
+                "824b081ec7c2e94c",
+                "c72534077049f552"
+            ]
+        ]
+    },
+    {
+        "id": "913142379bbf8ecd",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "convertirNumero",
+        "func": "// Suponemos que msg.payload es un string como \"16.50\"\nvar value = parseFloat(msg.payload.current_rms);\n\n// Verificamos que sea un número válido\nif (!isNaN(value)) {\n    msg.payload = value;\n} else {\n    // Si no es válido, dejamos el valor en 0 o null según prefieras\n    msg.payload = 0;\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 840,
+        "wires": [
+            [
+                "26c8ace94c04f439",
+                "39d855be0a0a0798",
+                "b7caafb15bcd7d5a"
+            ]
+        ]
+    },
+    {
+        "id": "eb01c78ab2ba3569",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "discretizarVibracion",
+        "func": "// Espera un payload con las aceleraciones en g:\n// Ejemplo: { \"x\": 0.12, \"y\": -0.05, \"z\": 1.02 }\n\nlet ax = Number(msg.payload.x);\nlet ay = Number(msg.payload.y);\nlet az = Number(msg.payload.z);\n\nif (isNaN(ax) || isNaN(ay) || isNaN(az)) {\n    node.warn(\"Datos inválidos: faltan ejes X, Y o Z\");\n    return null;\n}\n\n// Magnitud del vector (sqrt(x^2 + y^2 + z^2))\nlet magnitude = Math.sqrt(ax*ax + ay*ay + az*az);\nmagnitude = magnitude * 1.15;\n\n// Salida\nmsg.payload = Number(magnitude.toFixed(3));\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 220,
+        "wires": [
+            [
+                "b5a08c1df63e729e",
+                "e7deb5b62de40544",
+                "73cd1cecc949ab7f"
+            ]
+        ]
+    },
+    {
+        "id": "68bda566a8b3a191",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "fe3bc1800bd1234d",
+        "order": 5,
+        "width": 1,
+        "height": 0,
+        "name": "x",
+        "label": "x = ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.x",
+        "valueType": "msg",
+        "x": 810,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "b5de1ba0fd97a5a7",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "fe3bc1800bd1234d",
+        "order": 6,
+        "width": 1,
+        "height": 0,
+        "name": "y",
+        "label": "y = ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.y",
+        "valueType": "msg",
+        "x": 810,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "bba2e62d8b6d7822",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "fe3bc1800bd1234d",
+        "order": 7,
+        "width": 1,
+        "height": 0,
+        "name": "z",
+        "label": "z = ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.z",
+        "valueType": "msg",
+        "x": 810,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "b5a08c1df63e729e",
+        "type": "ui-gauge",
+        "z": "1d8c128a74b26a4c",
+        "name": "vibracion",
+        "group": "fe3bc1800bd1234d",
+        "order": 2,
+        "value": "payload",
+        "valueType": "msg",
+        "width": 3,
+        "height": 3,
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Vibración",
+        "alwaysShowTitle": false,
+        "floatingTitlePosition": "top-left",
+        "units": "Índice de Vibración",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {
+                "from": "0",
+                "color": "#5cd65c",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "2.1",
+                "color": "#eab253",
+                "text": "",
+                "textType": "label"
+            },
+            {
+                "from": "3.6",
+                "color": "#ea5353",
+                "text": "",
+                "textType": "label"
+            }
+        ],
+        "min": 0,
+        "max": "5",
+        "sizeThickness": 16,
+        "sizeGap": 4,
+        "sizeKeyThickness": 8,
+        "styleRounded": true,
+        "styleGlow": false,
+        "className": "",
+        "x": 1000,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "873002c0b0bc2447",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "1673bc6579bda53e",
+        "order": 2,
+        "width": 3,
+        "height": 0,
+        "name": "Operador",
+        "label": "Operador en turno: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.usuario",
+        "valueType": "msg",
+        "x": 680,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "d449a0218f5bb920",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "1673bc6579bda53e",
+        "order": 4,
+        "width": 2,
+        "height": 0,
+        "name": "horaEntrada",
+        "label": "Hora entrada: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.entrada",
+        "valueType": "msg",
+        "x": 730,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "f7b7eea68eff085f",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "fe3bc1800bd1234d",
+        "order": 3,
+        "width": 2,
+        "height": 0,
+        "name": "corriente",
+        "label": "Corriente = ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.current_rms",
+        "valueType": "msg",
+        "x": 660,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "26c8ace94c04f439",
+        "type": "ui-gauge",
+        "z": "1d8c128a74b26a4c",
+        "name": "corriente",
+        "group": "fe3bc1800bd1234d",
+        "order": 1,
+        "value": "payload",
+        "valueType": "msg",
+        "width": 3,
+        "height": 3,
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Corriente",
+        "alwaysShowTitle": false,
+        "floatingTitlePosition": "top-left",
+        "units": "A",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {
+                "from": "0",
+                "color": "#5cd65c",
+                "text": "0A",
+                "textType": "str"
+            },
+            {
+                "from": "10",
+                "color": "#ea5353",
+                "text": "15A",
+                "textType": "str"
+            }
+        ],
+        "min": "0",
+        "max": "15",
+        "sizeThickness": 16,
+        "sizeGap": 4,
+        "sizeKeyThickness": 8,
+        "styleRounded": true,
+        "styleGlow": false,
+        "className": "",
+        "x": 840,
+        "y": 840,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b6729bd6a2610f9f",
+        "type": "mqtt in",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "topic": "datos/microparo",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "1bdbd5fea9c43a9d",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 220,
+        "y": 1020,
+        "wires": [
+            [
+                "7ded15137f768207",
+                "87b4ac5ae5cebafe"
+            ]
+        ]
+    },
+    {
+        "id": "7ded15137f768207",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 10",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 1140,
+        "wires": []
+    },
+    {
+        "id": "87b4ac5ae5cebafe",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "dividirDatosBotonera",
+        "func": "// Ejemplo de payload: \"ID:BUTTON;ESTADO:verdadero;MID:3\"\nlet payload = msg.payload;\n\n// Separar parámetros por ';'\nlet parts = payload.split(';');\nlet data = {};\n\nparts.forEach(part => {\n    let keyValue = part.split(':');\n    if (keyValue.length === 2) {\n        let key = keyValue[0].trim();\n        let value = keyValue[1].trim();\n        data[key] = value;\n    }\n});\n\n// Convertir ESTADO a boolean\nlet estado = (data.ESTADO === \"verdadero\");\n\n// Convertir MID a número\nlet mid = parseInt(data.MID);\n\n// Salida estructurada\nmsg.payload = {\n    id: data.ID || null,\n    estado: estado,\n    mid: mid\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 1020,
+        "wires": [
+            [
+                "b53d3b164e992330"
+            ]
+        ]
+    },
+    {
+        "id": "b53d3b164e992330",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "visualizarDatos",
+        "func": "// =======================================================\n// 1) CONTROL DE INICIO DE TURNO → REINICIAR TODO\n// =======================================================\n\n// Leer señal de turno (si existe)\nlet inicioTurno = msg.payload.inicioTurno;\n\n// Estado actual del turno\nlet turnoActivo = context.get(\"turnoActivo\") || false;\n\n// ---- INICIO DE TURNO → REINICIO TOTAL ----\nif (inicioTurno === true && !turnoActivo) {\n\n    context.set(\"turnoActivo\", true);\n\n    // RESET GLOBAL\n    context.set(\"activo\", 0);\n    context.set(\"startTime\", null);\n\n    context.set(\"t1\", []);\n    context.set(\"t2\", []);\n    context.set(\"t3\", []);\n\n    context.set(\"c1\", 0);\n    context.set(\"c2\", 0);\n    context.set(\"c3\", 0);\n\n    context.set(\"sum1\", 0);\n    context.set(\"sum2\", 0);\n    context.set(\"sum3\", 0);\n\n    msg.payload = {\n        activo: 0,\n        timers: { m1: [], m2: [], m3: [] },\n        cantidad: { m1: 0, m2: 0, m3: 0 },\n        totales: { m1: 0, m2: 0, m3: 0 },\n        descripcion: \"No hay microparos activos\"\n    };\n\n    return msg;\n}\n\n// ---- FIN DE TURNO SOLO MARCA ESTADO, NO REINICIA ----\nif (inicioTurno === false && turnoActivo) {\n    context.set(\"turnoActivo\", false);\n    // No reiniciamos aquí\n    return null;\n}\n\n\n// =======================================================\n// 2) VALIDACIÓN PARA MICROPAROS\n// =======================================================\nif (typeof msg.payload.estado === \"undefined\") {\n    return null;\n}\n\n\n// =======================================================\n// 3) LÓGICA PRINCIPAL DE MICROPAROS\n// =======================================================\n\nlet estado = msg.payload.estado; // true/false\nlet mid = msg.payload.mid;       // 1,2,3\n\n// Obtener de contexto\nlet activo = context.get(\"activo\") || 0;\nlet startTime = context.get(\"startTime\") || null;\n\nlet t1 = context.get(\"t1\") || [];\nlet t2 = context.get(\"t2\") || [];\nlet t3 = context.get(\"t3\") || [];\n\nlet c1 = context.get(\"c1\") || 0;\nlet c2 = context.get(\"c2\") || 0;\nlet c3 = context.get(\"c3\") || 0;\n\nlet sum1 = context.get(\"sum1\") || 0;\nlet sum2 = context.get(\"sum2\") || 0;\nlet sum3 = context.get(\"sum3\") || 0;\n\n\n// --------------------------------------------------------\n// Solo permitir un microparo activo a la vez\n// --------------------------------------------------------\nif (estado === true) {\n\n    if (activo !== 0 && activo !== mid) {\n        msg.payload = {\n            error: \"Ya hay un microparo activo\",\n            activo_actual: activo\n        };\n        return msg;\n    }\n\n    if (activo === 0) {\n        activo = mid;\n        startTime = Date.now();\n\n        if (mid === 1) c1++;\n        if (mid === 2) c2++;\n        if (mid === 3) c3++;\n    }\n}\n\n\n// --------------------------------------------------------\n// Termina el microparo\n// --------------------------------------------------------\nif (estado === false && activo === mid) {\n\n    let tiempo = (Date.now() - startTime) / 1000;\n\n    if (mid === 1) {\n        t1.push(tiempo);\n        if (t1.length > 10) t1.shift();\n        sum1 += tiempo;\n    }\n\n    if (mid === 2) {\n        t2.push(tiempo);\n        if (t2.length > 10) t2.shift();\n        sum2 += tiempo;\n    }\n\n    if (mid === 3) {\n        t3.push(tiempo);\n        if (t3.length > 10) t3.shift();\n        sum3 += tiempo;\n    }\n\n    activo = 0;\n    startTime = null;\n}\n\n\n// --------------------------------------------------------\n// Guardar en contexto\n// --------------------------------------------------------\ncontext.set(\"activo\", activo);\ncontext.set(\"startTime\", startTime);\ncontext.set(\"t1\", t1);\ncontext.set(\"t2\", t2);\ncontext.set(\"t3\", t3);\ncontext.set(\"c1\", c1);\ncontext.set(\"c2\", c2);\ncontext.set(\"c3\", c3);\ncontext.set(\"sum1\", sum1);\ncontext.set(\"sum2\", sum2);\ncontext.set(\"sum3\", sum3);\n\n\n// --------------------------------------------------------\n// Salida\n// --------------------------------------------------------\nmsg.payload = {\n    activo: activo,\n    timers: {\n        m1: t1,\n        m2: t2,\n        m3: t3\n    },\n    cantidad: {\n        m1: c1,\n        m2: c2,\n        m3: c3\n    },\n    totales: {\n        m1: sum1,\n        m2: sum2,\n        m3: sum3\n    },\n    descripcion:\n        activo === 0 ? \"No hay microparo activo\" :\n            (activo === 1 ? \"Motivos personales\" :\n                activo === 2 ? \"Cargando material\" :\n                    \"Accidente\")\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 700,
+        "y": 1020,
+        "wires": [
+            [
+                "87ad1392a1ea4bb6",
+                "62c39b18c3afc7c2",
+                "3ad7b5fa6278425c"
+            ]
+        ]
+    },
+    {
+        "id": "87ad1392a1ea4bb6",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "fce03de03151db70",
+        "order": 0,
+        "width": 3,
+        "height": 0,
+        "name": "microparo",
+        "label": "Microparo: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.descripcion",
+        "valueType": "msg",
+        "x": 900,
+        "y": 1020,
+        "wires": []
+    },
+    {
+        "id": "ad9435d78ddbba88",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "1673bc6579bda53e",
+        "order": 6,
+        "width": 2,
+        "height": 0,
+        "name": "horaSalida",
+        "label": "Hora Salida: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.salida",
+        "valueType": "msg",
+        "x": 730,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "39d855be0a0a0798",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 14",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 900,
+        "wires": []
+    },
+    {
+        "id": "824b081ec7c2e94c",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 15",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 660,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "62c39b18c3afc7c2",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "guardarBitacoraMicroparos",
+        "func": "// --------------------------------\n// CONTEXTO\n// --------------------------------\nlet startTime = context.get(\"startTime\") || null;\nlet running = context.get(\"running\") || false;\n\n// Microparos\nlet ultCantidad = context.get(\"ultCantidad\") || { m1: 0, m2: 0, m3: 0 };\nlet ultTotales = context.get(\"ultTotales\") || { m1: 0, m2: 0, m3: 0 };\n\n// Usuario del turno\nlet ultUsuario = context.get(\"ultUsuario\") || \"\";   // <-- NUEVO\n\n\n// --------------------------------\n// 1) MENSAJES DE MICROPAROS\n// --------------------------------\nif (msg.payload.cantidad || msg.payload.totales) {\n\n    if (msg.payload.cantidad) {\n        context.set(\"ultCantidad\", msg.payload.cantidad);\n    }\n\n    if (msg.payload.totales) {\n        context.set(\"ultTotales\", msg.payload.totales);\n    }\n\n    return null;\n}\n\n\n// --------------------------------\n// 2) MENSAJE DE USUARIO\n// --------------------------------\nif (msg.payload.usuario) {\n\n    context.set(\"ultUsuario\", msg.payload.usuario);   // <-- Guardar usuario\n\n    return null;\n}\n\n\n// --------------------------------\n// 3) MENSAJES DE INICIO/FIN DE TURNO (RFID)\n// --------------------------------\nif (typeof msg.payload.inicioTurno === \"undefined\") {\n    return null;\n}\n\nlet estado = msg.payload.inicioTurno;\n\n\n// --------------------------------\n// INICIO DE TURNO → REINICIO COMPLETO\n// --------------------------------\nif (estado === true && !running) {\n\n    running = true;\n    startTime = Date.now();\n\n    // Reset de microparos\n    context.set(\"ultCantidad\", { m1: 0, m2: 0, m3: 0 });\n    context.set(\"ultTotales\", { m1: 0, m2: 0, m3: 0 });\n\n    // Reset de usuario\n    context.set(\"ultUsuario\", \"\");   // <-- limpiar usuario\n\n    context.set(\"running\", true);\n    context.set(\"startTime\", startTime);\n\n    return null;\n}\n\n\n// --------------------------------\n// FIN DE TURNO → ESCRIBIR CSV\n// --------------------------------\nif (estado === false && running) {\n\n    running = false;\n    context.set(\"running\", false);\n\n    let duracion = ((Date.now() - startTime) / 1000).toFixed(2);\n\n    // Recuperar datos guardados\n    let c = context.get(\"ultCantidad\");\n    let s = context.get(\"ultTotales\");\n    let u = context.get(\"ultUsuario\");  // <-- usuario\n\n\n    // ------ HEADER ------\n    let header =\n        \"duracion_segundos,\" +\n        \"cantidad_m1,\" +\n        \"cantidad_m2,\" +\n        \"cantidad_m3,\" +\n        \"total_m1,\" +\n        \"total_m2,\" +\n        \"total_m3,\" +\n        \"usuario\\n\";\n\n    // ------ LÍNEA ------\n    let linea =\n        duracion + \",\" +\n        c.m1 + \",\" +\n        c.m2 + \",\" +\n        c.m3 + \",\" +\n        s.m1 + \",\" +\n        s.m2 + \",\" +\n        s.m3 + \",\" +\n        (u || \"\") + \"\\n\";\n\n    msg.payload = header + linea;\n    return msg;\n}\n\n\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1160,
+        "y": 780,
+        "wires": [
+            [
+                "9918fb50c015a7f4"
+            ]
+        ]
+    },
+    {
+        "id": "9918fb50c015a7f4",
+        "type": "file",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "filename": "D:\\7mo_semestre\\Proyecto\\industria_4_0\\Bitacoras\\bitacora_microparos.csv",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": false,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 1610,
+        "y": 780,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3ad7b5fa6278425c",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 17",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload.totales.m1",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 920,
+        "y": 1100,
+        "wires": []
+    },
+    {
+        "id": "e7deb5b62de40544",
+        "type": "ui-chart",
+        "z": "1d8c128a74b26a4c",
+        "group": "a4071ae5ac26a758",
+        "name": "",
+        "label": "Vibracion",
+        "order": 9007199254740991,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "timestamp",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "xmin": "",
+        "xmax": "",
+        "yAxisLabel": "",
+        "yAxisProperty": "payload",
+        "yAxisPropertyType": "msg",
+        "ymin": "-1",
+        "ymax": "3",
+        "bins": 10,
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 4,
+        "showLegend": true,
+        "removeOlder": 1,
+        "removeOlderUnit": "3600",
+        "removeOlderPoints": "",
+        "colors": [
+            "#0095ff",
+            "#ff0000",
+            "#ff7f0e",
+            "#2ca02c",
+            "#a347e1",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "textColor": [
+            "#666666"
+        ],
+        "textColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "gridColorDefault": true,
+        "width": "6",
+        "height": "4",
+        "className": "",
+        "interpolation": "linear",
+        "x": 1020,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b7caafb15bcd7d5a",
+        "type": "ui-chart",
+        "z": "1d8c128a74b26a4c",
+        "group": "a4071ae5ac26a758",
+        "name": "",
+        "label": "Corriente",
+        "order": 9007199254740991,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "timestamp",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "xmin": "",
+        "xmax": "",
+        "yAxisLabel": "",
+        "yAxisProperty": "payload",
+        "yAxisPropertyType": "msg",
+        "ymin": "-5",
+        "ymax": "5",
+        "bins": 10,
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 4,
+        "showLegend": true,
+        "removeOlder": 1,
+        "removeOlderUnit": "3600",
+        "removeOlderPoints": "",
+        "colors": [
+            "#0095ff",
+            "#ff0000",
+            "#ff7f0e",
+            "#2ca02c",
+            "#a347e1",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "textColor": [
+            "#666666"
+        ],
+        "textColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "gridColorDefault": true,
+        "width": "6",
+        "height": "4",
+        "className": "",
+        "interpolation": "linear",
+        "x": 960,
+        "y": 940,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "c72534077049f552",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "guardarBitacoraMaquinado",
+        "func": "// ----------------------------\n// VARIABLES DE CONTEXTO\n// ----------------------------\nlet activo = context.get('activo') || false;\nlet startTime = context.get('startTime') || 0;\n\n// operador viene del contexto GLOBAL\nlet operador = global.get(\"operadorActual\") || \"sin operador\";\n\n// Buffers para sincronizar datos\nlet lastMagnitude = context.get('lastMagnitude') || null;\nlet lastCurrent = context.get('lastCurrent') || null;\n\n// Buffer CSV temporal\nlet buffer = context.get('bufferCSV') || [];\n\n\n// ----------------------------\n// Ya NO intentamos detectar UID aquí\n// Este nodo solo usa el operador global\n// ----------------------------\n\n\n// ----------------------------\n// INICIO / FIN DE TURNO\n// ----------------------------\nif (typeof msg.payload === \"object\" && msg.payload.inicioTurno !== undefined) {\n\n    // INICIO DEL TURNO: limpiar y preparar\n    if (msg.payload.inicioTurno === true) {\n        activo = true;\n        startTime = Date.now();\n\n        context.set(\"activo\", activo);\n        context.set(\"startTime\", startTime);\n\n        // limpiar buffers de datos\n        context.set(\"lastMagnitude\", null);\n        context.set(\"lastCurrent\", null);\n\n        // limpiar buffer CSV\n        buffer = [];\n        context.set(\"bufferCSV\", buffer);\n\n        return null;\n    }\n\n    // FIN DEL TURNO: enviar CSV completo\n    if (msg.payload.inicioTurno === false) {\n        activo = false;\n        context.set(\"activo\", activo);\n\n        buffer = context.get(\"bufferCSV\") || [];\n\n        if (buffer.length > 0) {\n            let header = \"fecha,magnitudVibracion,corriente,tiempo,operador\\n\";\n            msg.payload = header + buffer.join(\"\");\n            context.set(\"bufferCSV\", []);\n            return msg;\n        }\n\n        return null;\n    }\n}\n\n\n// Si no está activo, no guardar nada todavía\nif (!activo) return null;\n\n\n// ----------------------------\n// PROCESAR VIBRACIÓN → MAGNITUD\n// ----------------------------\nif (typeof msg.payload === \"string\") {\n    let match = msg.payload.match(/X:([-\\d.]+),Y:([-\\d.]+),Z:([-\\d.]+)/);\n    if (match) {\n        let x = parseFloat(match[1]);\n        let y = parseFloat(match[2]);\n        let z = parseFloat(match[3]);\n\n        let magnitude = Math.sqrt(x * x + y * y + z * z);\n        magnitude = Number((magnitude * 1.15).toFixed(2));\n\n        lastMagnitude = magnitude;\n        context.set(\"lastMagnitude\", lastMagnitude);\n    }\n}\n\n\n// ----------------------------\n// PROCESAR CORRIENTE\n// ----------------------------\nif (typeof msg.payload === \"object\" && msg.payload.current_rms !== undefined) {\n    lastCurrent = parseFloat(msg.payload.current_rms);\n    context.set(\"lastCurrent\", lastCurrent);\n}\n\n\n// ----------------------------\n// NECESITAMOS MAGNITUD Y CORRIENTE\n// ----------------------------\nif (lastMagnitude === null || lastCurrent === null) {\n    return null;\n}\n\n\n// ----------------------------\n// TIEMPO TRANSCURRIDO\n// ----------------------------\nlet elapsed = ((Date.now() - startTime) / 1000).toFixed(2);\n\n\n// ----------------------------\n// FECHA DD/MM/YYYY\n// ----------------------------\nlet fecha = null;\ntry {\n    fecha = new Date().toLocaleDateString('es-ES', { timeZone: 'America/Mexico_City' });\n} catch (e) {\n    let d = new Date();\n    let day = String(d.getDate()).padStart(2, '0');\n    let month = String(d.getMonth() + 1).padStart(2, '0');\n    let year = d.getFullYear();\n    fecha = `${day}/${month}/${year}`;\n}\n\n\n// ----------------------------\n// Construir línea CSV\n// ----------------------------\nlet csv =\n    fecha + \",\" +\n    lastMagnitude + \",\" +\n    lastCurrent + \",\" +\n    elapsed + \",\" +\n    operador + \"\\n\";\n\n\n// ----------------------------\n// Guardar en buffer temporal\n// ----------------------------\nbuffer = context.get(\"bufferCSV\") || [];\nbuffer.push(csv);\ncontext.set(\"bufferCSV\", buffer);\n\n\n// Limpiar buffers para siguiente ciclo\ncontext.set(\"lastMagnitude\", null);\ncontext.set(\"lastCurrent\", null);\n\n\n// Nada se envía hasta fin de turno\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1160,
+        "y": 700,
+        "wires": [
+            [
+                "ca8ab947cf0174ab"
+            ]
+        ]
+    },
+    {
+        "id": "ca8ab947cf0174ab",
+        "type": "file",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "filename": "D:\\7mo_semestre\\Proyecto\\industria_4_0\\Bitacoras\\datos_turno.csv",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": false,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 1580,
+        "y": 700,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "73cd1cecc949ab7f",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "calibracionEstadoVibraciones",
+        "func": "// =============================\n// VARIABLES DE CONTEXTO\n// =============================\nlet state = context.get(\"state\") || \"reposo\";\n\n// Buffers y parámetros\nlet buffer = context.get(\"buffer\") || [];\nlet calibrated = context.get(\"calibrated\") || false;\n\nlet desv_reposo = context.get(\"desv_reposo\");\nlet rango_reposo = context.get(\"rango_reposo\");\n\nlet startTime = context.get(\"startTime\") || null;\n\n// =============================\n// 1) Leer magnitud\n// =============================\nlet m = Number(msg.payload);\nif (isNaN(m)) return null;\n\n// =============================\n// 2) Revisar si el usuario pidió calibración\n// =============================\nlet startCal = global.get(\"empezarCalibracion\") || false;\n\n// ===============================================\n// *** NUEVO BLOQUE → Permite recalibrar cuando quieras\n// ===============================================\nif (startCal && calibrated) {\n    // Si el usuario presionó calibrar otra vez,\n    // reiniciar el estado para permitir recalibración nueva\n    calibrated = false;\n    context.set(\"calibrated\", false);\n    context.set(\"buffer\", []);\n    context.set(\"startTime\", null);\n}\n// ===============================================\n\n// Si aún no está calibrado y el usuario pidió iniciar calibración:\nif (!calibrated && startCal) {\n\n    // Inicializar tiempo de inicio\n    if (!startTime) {\n        startTime = Date.now();\n        context.set(\"startTime\", startTime);\n    }\n\n    const CAL_TIME = 20000; // 20 segundos\n    let elapsed = Date.now() - startTime;\n    let remaining = Math.max(0, Math.ceil((CAL_TIME - elapsed) / 1000));\n\n    // Mientras calibra, guarda valores\n    buffer.push(m);\n    context.set(\"buffer\", buffer);\n\n    // Mensaje durante la calibración\n    msg.payload = {\n        estado: \"calibrando... Tiempo restante: \" + remaining,\n        magnitud: m\n    };\n\n    // Si aún no pasan los 20 segundos → salir\n    if (elapsed < CAL_TIME) {\n        return msg;\n    }\n\n    // =============================\n    // 3) Termina la calibración → calcular métricas\n    // =============================\n\n    // Calcular promedio\n    let avg = buffer.reduce((a, b) => a + b, 0) / buffer.length;\n\n    // Desviación estándar\n    let variance = buffer.reduce((a, b) => a + (b - avg) * (b - avg), 0) / buffer.length;\n    let sd = Math.sqrt(variance);\n\n    // Rango\n    let minV = Math.min(...buffer);\n    let maxV = Math.max(...buffer);\n    let rango = maxV - minV;\n\n    // Guardar como baseline de reposo\n    context.set(\"desv_reposo\", sd);\n    context.set(\"rango_reposo\", rango);\n    context.set(\"calibrated\", true);\n\n    // Reset de la variable global para permitir otra calibración futura\n    global.set(\"empezarCalibracion\", false);\n\n    // Limpieza\n    context.set(\"startTime\", null);\n    context.set(\"buffer\", []);\n\n    msg.payload = {\n        estado: \"Calibración completada\",\n        desv_reposo: sd,\n        rango_reposo: rango\n    };\n    return msg;\n}\n\n// =============================\n// 4) Si no está calibrado y no pidieron calibrar → no hacer nada\n// =============================\nif (!calibrated) {\n    msg.payload = {\n        estado: \"esperando calibración...\",\n        magnitud: m\n    };\n    return msg;\n}\n\n// =============================\n// 5) YA CALIBRADO → DETECTAR ESTADO\n// =============================\n\n// Ventana móvil para análisis (por ejemplo 40 muestras)\nbuffer.push(m);\nif (buffer.length > 40) buffer.shift();\ncontext.set(\"buffer\", buffer);\n\n// Calcular estadísticas actuales\nlet avg = buffer.reduce((a, b) => a + b, 0) / buffer.length;\nlet variance = buffer.reduce((a, b) => a + (b - avg) * (b - avg), 0) / buffer.length;\nlet sd = Math.sqrt(variance);\n\nlet minV = Math.min(...buffer);\nlet maxV = Math.max(...buffer);\nlet rango = maxV - minV;\n\n// Umbrales dinámicos\nlet umbral_desv = desv_reposo * 5;\nlet umbral_rango = rango_reposo * 10;\n\n// Máquina de estados\nif (state === \"reposo\") {\n    if (sd > umbral_desv || rango > umbral_rango) {\n        state = \"uso\";\n    }\n} else {\n    if (sd < umbral_desv * 0.6 && rango < umbral_rango * 0.6) {\n        state = \"reposo\";\n    }\n}\n\ncontext.set(\"state\", state);\n\n// =============================\n// 6) SALIDA FINAL\n// =============================\nmsg.payload = {\n    estado: state === \"uso\" ? \"En uso\" : \"En reposo\",\n    magnitud: m,\n    sd: sd,\n    rango: rango\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1080,
+        "y": 300,
+        "wires": [
+            [
+                "41361cdc4bdeb103",
+                "6b33b8663ed27f02"
+            ]
+        ]
+    },
+    {
+        "id": "41361cdc4bdeb103",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "4612566accca86f7",
+        "order": 1,
+        "width": 3,
+        "height": 0,
+        "name": "desplegarEstado",
+        "label": "Estado: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload.estado",
+        "valueType": "msg",
+        "x": 1390,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "f0b9e16e2df2cfd9",
+        "type": "ui-button",
+        "z": "1d8c128a74b26a4c",
+        "group": "4612566accca86f7",
+        "name": "calibrar",
+        "label": "Calibrar",
+        "order": 3,
+        "width": 2,
+        "height": 0,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "click",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "red",
+        "textColor": "white",
+        "iconColor": "",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 1020,
+        "y": 480,
+        "wires": [
+            [
+                "9c807da8e91589b3"
+            ]
+        ]
+    },
+    {
+        "id": "9c807da8e91589b3",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "botonCalibracion",
+        "func": "// El botón envía \"click\"\nlet payload = msg.payload;\n\n// Leemos el estado global\nlet calibrating = global.get(\"empezarCalibracion\") || false;\nlet calibrated = context.get(\"calibrado\") || false;\n\n// Solo actuamos si el mensaje es \"click\"\nif (payload === \"click\") {\n\n    // Si ya está calibrando, no hacemos nada\n    if (calibrating) {\n        msg.payload = \"La calibración ya está corriendo...\";\n        return msg;\n    }\n\n    // Si aún no está calibrando → iniciar calibración\n    global.set(\"empezarCalibracion\", true);\n    context.set(\"calibrado\", false);\n\n    msg.payload = \"Calibración iniciada\";\n    return msg;\n}\n\n// Si llega otra cosa, la ignoramos\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1230,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5c453a9222e8e076",
+        "type": "mqtt in",
+        "z": "1d8c128a74b26a4c",
+        "name": "",
+        "topic": "datos/score",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "1bdbd5fea9c43a9d",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 210,
+        "y": 1280,
+        "wires": [
+            [
+                "4adc0822796815bf",
+                "7385829b76623d33"
+            ]
+        ]
+    },
+    {
+        "id": "4adc0822796815bf",
+        "type": "ui-text",
+        "z": "1d8c128a74b26a4c",
+        "group": "1673bc6579bda53e",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "Score",
+        "label": "Score 5s: ",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 410,
+        "y": 1280,
+        "wires": []
+    },
+    {
+        "id": "04bb7072cead1fe4",
+        "type": "ui-led",
+        "z": "1d8c128a74b26a4c",
+        "name": "visualAndon",
+        "group": "4612566accca86f7",
+        "order": 2,
+        "width": 1,
+        "height": 0,
+        "label": "",
+        "labelPlacement": "left",
+        "labelAlignment": "left",
+        "states": [
+            {
+                "value": "esperando calibración...",
+                "valueType": "str",
+                "color": "#ff0000"
+            },
+            {
+                "value": "En uso",
+                "valueType": "str",
+                "color": "#00ff00"
+            },
+            {
+                "value": "En reposo",
+                "valueType": "str",
+                "color": "#ffea00"
+            }
+        ],
+        "allowColorForValueInMessage": false,
+        "shape": "circle",
+        "showBorder": true,
+        "showGlow": false,
+        "x": 1510,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "6b33b8663ed27f02",
+        "type": "function",
+        "z": "1d8c128a74b26a4c",
+        "name": "convertirPayload",
+        "func": "// Verifica que venga el objeto y la propiedad\nif (msg.payload && msg.payload.estado !== undefined) {\n    msg.payload = msg.payload.estado;\n} else {\n    msg.payload = null;   // O lo que tú quieras poner si no viene\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1310,
+        "y": 380,
+        "wires": [
+            [
+                "04bb7072cead1fe4"
+            ]
+        ]
+    },
+    {
+        "id": "7385829b76623d33",
+        "type": "debug",
+        "z": "1d8c128a74b26a4c",
+        "name": "debug 18",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 380,
+        "y": 1400,
+        "wires": []
+    },
+    {
+        "id": "1bdbd5fea9c43a9d",
+        "type": "mqtt-broker",
+        "name": "Lap_Alex",
+        "broker": "10.25.90.33",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "fe3bc1800bd1234d",
+        "type": "ui-group",
+        "name": "Indicadores",
+        "page": "05e299abbf09c5b6",
+        "width": 6,
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "1673bc6579bda53e",
+        "type": "ui-group",
+        "name": "Operador",
+        "page": "05e299abbf09c5b6",
+        "width": 4,
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "fce03de03151db70",
+        "type": "ui-group",
+        "name": "Microparo",
+        "page": "05e299abbf09c5b6",
+        "width": 4,
+        "height": 1,
+        "order": 4,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "a4071ae5ac26a758",
+        "type": "ui-group",
+        "name": "Pruebas",
+        "page": "a2adf9b613fcb649",
+        "width": 6,
+        "height": 1,
+        "order": -1,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "4612566accca86f7",
+        "type": "ui-group",
+        "name": "Calibracion",
+        "page": "05e299abbf09c5b6",
+        "width": 6,
+        "height": 1,
+        "order": 3,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "05e299abbf09c5b6",
+        "type": "ui-page",
+        "name": "Truman Device Dashboard",
+        "ui": "95ab7d58de70598f",
+        "path": "/page1",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "bdc0aa05efe9a263",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": "0",
+                "cols": "3"
+            },
+            {
+                "name": "Tablet",
+                "px": "576",
+                "cols": "6"
+            },
+            {
+                "name": "Small Desktop",
+                "px": "768",
+                "cols": "9"
+            },
+            {
+                "name": "Desktop",
+                "px": "1024",
+                "cols": "12"
+            }
+        ],
+        "order": 1,
+        "className": "",
+        "visible": "true",
+        "disabled": "false"
+    },
+    {
+        "id": "a2adf9b613fcb649",
+        "type": "ui-page",
+        "name": "Pruebas",
+        "ui": "95ab7d58de70598f",
+        "path": "/page3",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "bdc0aa05efe9a263",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": "0",
+                "cols": "3"
+            },
+            {
+                "name": "Tablet",
+                "px": "576",
+                "cols": "6"
+            },
+            {
+                "name": "Small Desktop",
+                "px": "768",
+                "cols": "9"
+            },
+            {
+                "name": "Desktop",
+                "px": "1024",
+                "cols": "12"
+            }
+        ],
+        "order": -1,
+        "className": "",
+        "visible": "true",
+        "disabled": "false"
+    },
+    {
+        "id": "95ab7d58de70598f",
+        "type": "ui-base",
+        "name": "My Dashboard",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": 1,
+        "showDisconnectNotification": true,
+        "allowInstall": false
+    },
+    {
+        "id": "bdc0aa05efe9a263",
+        "type": "ui-theme",
+        "name": "TrumanDevice",
+        "colors": {
+            "surface": "#fd891c",
+            "primary": "#000000",
+            "bgPage": "#f2f2f2",
+            "groupBg": "#ffd599",
+            "groupOutline": "#000000"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "bc72a5440b892c55",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "@flowfuse/node-red-dashboard": "1.29.0",
+            "@flowfuse/node-red-dashboard-2-ui-led": "1.1.0"
+        }
+    }
+]
