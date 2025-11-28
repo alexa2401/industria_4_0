@@ -1,6 +1,6 @@
 #include "current_sensor.h"
 
-const int LED_PIN = D5;
+const int LED_PIN = D3;
 const int BUTTON_PIN = D4;
 
 const long BLINK_INTERVAL = 500;
@@ -63,7 +63,7 @@ void setup() {
 void loop() {
     handleButtonAndState();
 
-    if (currentState == CALIBRATION_MODE) {
+    if (1 == 0) {
         handleBlinking();
     } 
     else {
