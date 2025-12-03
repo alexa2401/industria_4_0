@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-container">
+            <div class="system-logo">
+                <div class="logo-icon">🔧</div>
+                <h1 class="system-name">Truman System</h1>
+                <p class="system-tagline">Sistema de Gestión Operativa</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Entrar</button>
+                <p class="hint">Usuario: admin | Contraseña: admin123</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pantalla de Menú Principal -->
+    <div id="menuScreen" class="screen">
+        <div class="menu-container">
+            <div class="menu-header">
+                <div class="menu-logo-small">🔧</div>
+                <h1>Truman System</h1>
+            </div>
+            <div class="menu-options">
+                <div class="menu-card" onclick="showResults()">
+                    <div class="icon">📊</div>
+                    <h2>Ver Resultados</h2>
+                    <p>Consulta los resultados y estadísticas</p>
+                </div>
+                <div class="menu-card" onclick="showOperators()">
+                    <div class="icon">👥</div>
+                    <h2>Administrar Operadores</h2>
+                    <p>Gestiona la información de los operadores</p>
+                </div>
+                <div class="menu-card" onclick="showMachines()">
+                    <div class="icon">⚙️</div>
+                    <h2>Administrar Máquinas</h2>
+                    <p>Gestiona el catálogo de máquinas y manuales</p>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="logout()">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Resultados - Selección de Máquina -->
+    <div id="resultsScreen" class="screen">
+        <div class="content-container">
+            <div class="header">
+                <h1>Reportes por Máquina</h1>
+                <button class="btn btn-secondary" onclick="showMenu()">Volver al Menú</button>
+            </div>
+            <p style="color: #666; margin-bottom: 25px;">Selecciona una máquina para ver o agregar reportes:</p>
+            <div id="machineSelectionGrid" class="machine-selection-grid">
+                <!-- Las máquinas se generarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Reportes de Máquina Específica -->
+    <div id="machineReportsScreen" class="screen">
+        <div class="content-container">
+            <div class="header">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                        <span style="font-size: 24px; cursor: pointer;" onclick="showResults()" title="Volver">←</span>
+                        <h1 id="currentMachineName">Reportes de Máquina</h1>
+                    </div>
+                    <p style="color: #666; font-size: 14px; margin: 0;">Reportes y gráficas de esta máquina</p>
+                </div>
+                <div class="header-buttons">
+                    <button class="btn btn-primary" onclick="showAddReportModal()">+ Agregar Reporte</button>
+                    <button class="btn btn-secondary" onclick="showResults()">Volver</button>
+                </div>
+            </div>
+            <div id="reportsGrid" class="reports-grid">
+                <!-- Los reportes se generarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Operadores -->
+    <div id="operatorsScreen" class="screen">
+        <div class="content-container">
+            <div class="header">
+                <h1>Administrar Operadores</h1>
+                <div class="header-buttons">
+                    <button class="btn btn-primary" onclick="showAddOperatorModal()">+ Agregar Operador</button>
+                    <button class="btn btn-secondary" onclick="showMenu()">Volver al Menú</button>
+                </div>
+            </div>
+            <div id="operatorsGrid" class="operators-grid">
+                <!-- Las tarjetas de operadores se generarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Máquinas -->
+    <div id="machinesScreen" class="screen">
+        <div class="content-container">
+            <div class="header">
+                <h1>Administrar Máquinas</h1>
+                <div class="header-buttons">
+                    <button class="btn btn-primary" onclick="showAddMachineModal()">+ Agregar Máquina</button>
+                    <button class="btn btn-secondary" onclick="showMenu()">Volver al Menú</button>
+                </div>
+            </div>
+            <div id="machinesGrid" class="machines-grid">
+                <!-- Las tarjetas de máquinas se generarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar/Editar Operador -->
+    <div id="operatorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Agregar Operador</h2>
+                <span class="close" onclick="closeOperatorModal()">&times;</span>
+            </div>
+            <form id="operatorForm">
+                <input type="hidden" id="operatorId">
+                <input type="hidden" id="operatorPhotoData">
+                <div class="form-group">
+                    <label for="operatorPhoto">Foto del Operador</label>
+                    <input type="file" id="operatorPhoto" accept="image/*" onchange="previewOperatorPhoto(event)">
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Opcional. Formatos: JPG, PNG (máx. 2MB)
+                    </small>
+                </div>
+                <div id="operatorPhotoPreviewContainer" style="display: none; margin: 15px 0; text-align: center;">
+                    <label>Vista previa:</label>
+                    <div style="margin-top: 10px;">
+                        <img id="operatorPhotoPreview" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #11998e;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="operatorName">Nombre Completo *</label>
+                    <input type="text" id="operatorName" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="operatorNumber">Número *</label>
+                        <input type="text" id="operatorNumber" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="operatorBloodType">Tipo de Sangre *</label>
+                        <select id="operatorBloodType" required>
+                            <option value="">Seleccionar</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="operatorRFC">RFC *</label>
+                    <input type="text" id="operatorRFC" maxlength="13" required>
+                </div>
+                <div class="form-group">
+                    <label for="operatorDescription">Descripción del Perfil</label>
+                    <textarea id="operatorDescription" rows="4"></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeOperatorModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar/Editar Máquina -->
+    <div id="machineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="machineModalTitle">Agregar Máquina</h2>
+                <span class="close" onclick="closeMachineModal()">&times;</span>
+            </div>
+            <form id="machineForm">
+                <input type="hidden" id="machineId">
+                <div class="form-group">
+                    <label for="machineName">Nombre de la Máquina *</label>
+                    <input type="text" id="machineName" required>
+                </div>
+                <div class="form-group">
+                    <label for="machineDescription">Descripción *</label>
+                    <textarea id="machineDescription" rows="4" required placeholder="Describe las características y usos de la máquina..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="machineManualLink">Link del Manual *</label>
+                    <input type="url" id="machineManualLink" required placeholder="https://ejemplo.com/manual.pdf">
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Ingresa la URL completa del manual (debe comenzar con http:// o https://)
+                    </small>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeMachineModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar/Editar Reporte -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="reportModalTitle">Agregar Reporte</h2>
+                <span class="close" onclick="closeReportModal()">&times;</span>
+            </div>
+            <form id="reportForm">
+                <input type="hidden" id="reportId">
+                <input type="hidden" id="reportImageData">
+                <input type="hidden" id="reportMachineId">
+                <div class="form-group">
+                    <label for="reportTitle">Título del Reporte *</label>
+                    <input type="text" id="reportTitle" required placeholder="Ej: Producción Semanal - Semana 42">
+                </div>
+                <div class="form-group">
+                    <label for="reportImage">Imagen de la Gráfica *</label>
+                    <input type="file" id="reportImage" accept="image/*" onchange="previewReportImage(event)">
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                        Formatos aceptados: JPG, PNG, GIF (máx. 5MB)
+                    </small>
+                </div>
+                <div id="imagePreviewContainer" style="display: none; margin: 15px 0;">
+                    <label>Vista previa:</label>
+                    <img id="imagePreview" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">
+                </div>
+                <div class="form-group">
+                    <label for="reportDescription">Descripción y Análisis *</label>
+                    <textarea id="reportDescription" rows="5" required placeholder="Describe los datos, tendencias y conclusiones de la gráfica..."></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn btn-primary">Guardar Reporte</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeReportModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
