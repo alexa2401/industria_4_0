@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <esp_now.h>
 
-const int analogPin = A0;
+const int analogPin = D0;
 
 void initCurrentSensor() {
     WiFi.mode(WIFI_STA);

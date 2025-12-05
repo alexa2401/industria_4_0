@@ -1,7 +1,7 @@
 #include "current_sensor.h"
 
-const int LED_PIN = D3;
-const int BUTTON_PIN = D4;
+const int LED_PIN = 3;
+const int BUTTON_PIN = 4;
 
 const long BLINK_INTERVAL = 500;
 const long TRANSMISSION_INTERVAL = 500;

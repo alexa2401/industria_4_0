@@ -1,2 +1,2 @@
-duracionTurnoSegundos,cantidadMotivosPersonales,cantidadMotivosMateriales,cantidadMotivosHerramienta,tiempoTotalMotivosPersonales,tiempoTotalMotivosMateriales,tiempoTotalMotivosHerramienta,usuario
-319.99,0,1,1,0,15.984,12.287,Ing Ricardo
+duracion_turno_s,duracion_trabajo_s,cantidad_m1,cantidad_m2,cantidad_m3,total_m1,total_m2,total_m3,usuario,pieza_buena,pieza_mala,total_pieza
+500.54,291.70,2,1,1,92.769,84.42,31.654,Ing Ricardo,1,0,1
